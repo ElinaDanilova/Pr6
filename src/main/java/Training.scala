@@ -13,7 +13,7 @@ object Training {
   val movieLensHomeDir = "C:\\Users\\itim\\IdeaProjects\\Pr6\\src\\sets\\"
 
   case class Rating(userId: Int, movieId: Int, rating: Float, timestamp: Long)
-
+  case class UserMovie(userId: Int, movieId: Int)
   case class Movie(movieId: Int, movieName: String, rating: Float)
 
   def parseRating(str: String): Rating = {
@@ -43,6 +43,12 @@ object Training {
       .read.textFile(movieLensHomeDir + "movies.dat").map { line =>
       val fields = line.split("::")
       (fields(0).toInt, fields(1))
+    }
+    //Load Movies
+    val predictRDD = sparkSession
+      .read.textFile(movieLensHomeDir + "predict.dat").map { line =>
+      val fields = line.split("::")
+      UserMovie(fields(0).toInt, fields(1).toInt)
     }
 
     //Load my ratings
@@ -77,8 +83,7 @@ object Training {
     val model = als.fit(training)
 
     //Evaluate Model Calculate RMSE
-    val predictions = model.transform(test)
-
+    val predictions = model.transform(test).na.drop
     val evaluator = new RegressionEvaluator()
       .setMetricName("rmse")
       .setLabelCol("rating")
@@ -88,7 +93,8 @@ object Training {
     println(s"Root-mean-square error = $rmse")
 
     //Get My Predictions
-    val myPredictions = model.transform(myRating).na.drop
+    val predict = predictRDD.toDF()
+    val myPredictions = model.transform(predict).na.drop
 
     //Show your recomendations
     val myMovies = myPredictions.map(r => Movie(r.getInt(1), movies(r.getInt(1)), r.getFloat(2))).toDF
